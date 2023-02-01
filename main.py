@@ -10,10 +10,12 @@ from keras.layers import Dropout
 from keras.layers import LSTM
 from keras.utils import to_categorical
 from keras.layers import Input
+from keras.layers import InputLayer
 from keras.models import Model
 from matplotlib import pyplot
 import os
 from tensorflow import keras
+import time
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
@@ -107,54 +109,27 @@ def run_experiment(repeats=10):
 # run the experiment
 # run_experiment()
 
-def split_keras_model(model, index):
-    # Input:
-    # model: A pre-trained Keras Sequential model
-    # index: The index of the layer where we want to split the model
 
-    # Output:
-    # model1: From layer 0 to index
-    # model2: From index+1 layer to the output of the original model
-    # The index layer will be the last layer of the model_1 and the same shape of that layer will be the input layer of the model_2
+def split_keras_model(model, layer):
+    model_f, model_h = Sequential(), Sequential()
 
-    # Creating the first part...
-    # Get the input layer shape
-    layer_input_1 = Input(model.layers[0].input_shape[1:])
-    # Initialize the model with the input layer
-    x = layer_input_1
-    # Foreach layer: connect it to the new model
-    for layer in model.layers[1:index]:
-        x = layer(x)
-    # Create the model instance
-    model1 = Model(inputs=layer_input_1, outputs=x)
+    for current_layer in range(0, layer):   # first model has : 0 to layer - 1
+        model_f.add(model.layers[current_layer])
 
+    # add input layer
+    model_h.add(InputLayer(input_shape=model.layers[layer].input_shape[1:]))
 
-    # Creating the second part...
-    # Get the input shape of desired layer
-    input_shape_2 = model.layers[index].get_input_shape_at(0)[1:]
-    print("Input shape of model 2: " + str(input_shape_2))
-    # A new input tensor to be able to feed the desired layer
-    layer_input_2 = Input(shape=input_shape_2)
+    for current_layer in range(layer, len(model.layers)):   # second model has: layer to end
+        model_h.add(model.layers[current_layer])
 
-    # Create the new nodes for each layer in the path
-    x = layer_input_2
-    # Foreach layer connect it to the new model
-    for layer in model.layers[index:]:
-        x = layer(x)
-
-    # create the model
-    model2 = Model(inputs=layer_input_2, outputs=x)
-
-    return (model1, model2)
-
+    return model_f, model_h
 
 def lstmsplit_client(client_model, test_samples, test_lables):
-    predictions = client_model.predict(test_samples)
-    print("predictions")
-    print(len(predictions))
+    return client_model.predict(test_samples)
 
 def lstmsplit_edge(edge_model, cut_input):
-    pass
+    return edge_model.predict(cut_input)
+
 
 
 def newStart():
@@ -164,13 +139,46 @@ def newStart():
     # load trained model
     reconstructed_model = keras.models.load_model("trained_model")  # accuracy =  91.245 %
 
+    # entire model latency
+    start_time = time.time()
+    reconstructed_model.predict(testX)
+    model_run_time = time.time() - start_time
+
+    print("model run tine = ")
+    print(model_run_time)
+    print('\n')
+
     # SPLIT
     client_model, edge_model = split_keras_model(reconstructed_model, 2)
 
     # predictions and output
-    # TODO: exact input and output od client and edge functions
-    client_output = lstmsplit_client(client_model, testX, test_labels)  # returns predictions array. len = 2947
-    final_output = lstmsplit_edge(edge_model, client_output)
+    c_start_time = time.time()
+    # client_output = lstmsplit_client(client_model, testX, test_labels)  # returns predictions array. len = 2947
+    client_output = client_model.predict(testX)
+    client_run_time = time.time() - c_start_time
+
+    print("client run time = ")
+    print(client_run_time)
+    print("\n")
+
+    e_start_time = time.time()
+    edge_model.predict(client_output)
+    edge_run_time = time.time() - e_start_time
+
+    print("edge run time = ")
+    print(edge_run_time)
+    print("\n")
+
+    # # try latency
+    # # make table with diff split layers
+    # # noise will be added to client_output
+
+    # print(client_output.shape)
+    # print(client_model.summary())
+    # print(edge_model.summary())
+
+    # final_output = lstmsplit_edge(edge_model, client_output)
+    # print(final_output.shape)
 
 
 newStart()
