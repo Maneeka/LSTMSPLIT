@@ -12,10 +12,11 @@ from keras.utils import to_categorical
 from keras.layers import Input
 from keras.layers import InputLayer
 from keras.models import Model
-from matplotlib import pyplot
 import os
 from tensorflow import keras
 import time
+import numpy as np
+import matplotlib.pyplot as plt
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
@@ -124,12 +125,13 @@ def split_keras_model(model, layer):
 
     return model_f, model_h
 
+
 def lstmsplit_client(client_model, test_samples, test_lables):
     return client_model.predict(test_samples)
 
+
 def lstmsplit_edge(edge_model, cut_input):
     return edge_model.predict(cut_input)
-
 
 
 def newStart():
@@ -139,46 +141,45 @@ def newStart():
     # load trained model
     reconstructed_model = keras.models.load_model("trained_model")  # accuracy =  91.245 %
 
-    # entire model latency
-    start_time = time.time()
-    reconstructed_model.predict(testX)
-    model_run_time = time.time() - start_time
-
-    print("model run tine = ")
-    print(model_run_time)
-    print('\n')
-
     # SPLIT
-    client_model, edge_model = split_keras_model(reconstructed_model, 2)
+    client_model, edge_model = split_keras_model(reconstructed_model, 3)
 
     # predictions and output
-    c_start_time = time.time()
-    # client_output = lstmsplit_client(client_model, testX, test_labels)  # returns predictions array. len = 2947
-    client_output = client_model.predict(testX)
-    client_run_time = time.time() - c_start_time
+    client_output = lstmsplit_client(client_model, testX, test_labels)  # returns predictions array. len = 2947
 
-    print("client run time = ")
-    print(client_run_time)
-    print("\n")
+    # noise addition to client output (cut layer)
+    noise = np.random.laplace(0, 0.1, client_output.shape)      # noise = random.normal(0, 0.1, data.shape)     # noise = random.exponential(0.1, data.shape)
+    transformed_output = client_output + noise
 
-    e_start_time = time.time()
-    edge_model.predict(client_output)
-    edge_run_time = time.time() - e_start_time
+    final_output = lstmsplit_edge(edge_model, transformed_output)
+    print(final_output)
 
-    print("edge run time = ")
-    print(edge_run_time)
-    print("\n")
+# newStart()
 
-    # # try latency
-    # # make table with diff split layers
-    # # noise will be added to client_output
+def latency_plot():
+    x = ['1', '2', '3']   # split layers
+    y_client = [2.1885, 2.0625, 2.0526]
+    z_edge = [0.3652, 0.3514, 0.3389]
 
-    # print(client_output.shape)
-    # print(client_model.summary())
-    # print(edge_model.summary())
+    X_axis = np.arange(len(x))
 
-    # final_output = lstmsplit_edge(edge_model, client_output)
-    # print(final_output.shape)
+    plt.bar(X_axis - 0.2, y_client, 0.4, label='Client Latency')
+    plt.bar(X_axis + 0.2, z_edge, 0.4, label='Edge Latency')
+
+    # Shrink current axis by 20%
+    ax = plt.subplot(111)
+    box = ax.get_position()
+    ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
+
+    # Put a legend to the right of the current axis
+    ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+
+    plt.xticks(X_axis, x)
+    plt.xlabel("Split Layer")
+    plt.ylabel("Time")
+    plt.title("SPLIT Model with noise Latency ")
+    # plt.legend()
+    plt.show()
 
 
-newStart()
+# latency_plot()
