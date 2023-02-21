@@ -101,15 +101,6 @@ def run_experiment(repeats=10):
     _, accuracy = model.evaluate(testX, testy, batch_size=batch_size, verbose=0)
     print(accuracy * 100.0)
 
-    # split was here before i moved it
-
-
-    # old code: summarize results
-    # summarize_results(scores)
-
-# run the experiment
-# run_experiment()
-
 
 def split_keras_model(model, layer):
     model_f, model_h = Sequential(), Sequential()
@@ -134,7 +125,7 @@ def lstmsplit_edge(edge_model, cut_input):
     return edge_model.predict(cut_input)
 
 
-def newStart():
+def start():
     # load data
     trainX, train_labels, testX, test_labels = load_dataset()
 
@@ -154,7 +145,7 @@ def newStart():
     final_output = lstmsplit_edge(edge_model, transformed_output)
     print(final_output)
 
-# newStart()
+# start()
 
 def latency_plot():
     x = ['1', '2', '3']   # split layers
